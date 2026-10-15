@@ -85,8 +85,15 @@ def normalize_var_type(var_type: str) -> str:
         return "STR"
     elif var_type in ["haplotype"]:
         return "HAPLOTYPE"
-    elif var_type in ["compoundheterozygous"]:
+    elif var_type in [
+        "compoundheterozygous",
+        "compoundheterozygote",
+        "compound heterozygote",
+        "compound heterozygous",
+    ]:
         return "COMPOUND_HET"
+    elif var_type in ["variation"]:
+        return "VARIATION"
     elif var_type in ["indel"]:
         return "INDEL"
     else:
@@ -244,15 +251,15 @@ def persist_row(
             gene_variant.genes.add(gene)
             caches.variant_gene_m2m_cache.add(m2m_key)
 
-    # 4. TranscriptAnnotation Lookup (Moved to a dedicated annotation cache dictionary)
-    annotation_key = (data["hgvs_c"], gene_variant.id)
+    # 4. TranscriptAnnotation Lookup (Using variant + transcript_base + hgvs_c unique constraint)
+    annotation_key = (gene_variant.id, data["transcript_base"], data["hgvs_c"])
     if annotation_key not in caches.annotation_cache:
         annotation, _ = TranscriptAnnotation.objects.get_or_create(
             variant=gene_variant,
+            transcript_base=data["transcript_base"],
             hgvs_c=data["hgvs_c"],
             defaults={
                 "hgvs_p": data["hgvs_p"],
-                "transcript_base": data["transcript_base"],
                 "transcript_version": data["transcript_version"],
                 "exon": data["exon"],
             },

@@ -122,20 +122,19 @@ class TranscriptAnnotation(models.Model):
     transcript_version = models.IntegerField(
         null=True, blank=True
     )  # e.g., 3 // The version might change over time, so we store it separately from the base transcript ID.
-    hgvs_c = models.CharField(
-        max_length=512, db_index=True, null=True, blank=True
+    hgvs_c = models.TextField(
+        null=True, blank=True
     )  # e.g., "c.432A>G"
-    hgvs_p = models.CharField(max_length=512, blank=True)
+    hgvs_p = models.TextField(blank=True)
 
     exon = models.CharField(
         max_length=64, blank=True
     )  # Exon number is transcript-dependent
 
-
     class Meta:
         constraints = [
             models.UniqueConstraint(
-                fields=["variant", "hgvs_c"],
+                fields=["variant", "transcript_base", "hgvs_c"],
                 name="unique_variant_transcript_annotation",
             )
         ]
@@ -182,7 +181,7 @@ class PatientVariant(models.Model):
     comment = models.TextField(blank=True)
 
     # original hgvs from excel
-    reported_hgvs_c = models.CharField(max_length=120, blank=True)
+    reported_hgvs_c = models.TextField(blank=True)
 
     class Meta:
         unique_together = ("report", "variant")

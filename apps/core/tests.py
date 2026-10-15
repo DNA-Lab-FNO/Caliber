@@ -174,5 +174,40 @@ class GeneVariantLongAlleleTests(TestCase):
 		self.assertEqual(var.alt_allele, long_alt)
 		self.assertEqual(var.allele_hash, compute_allele_hash(long_ref, long_alt))
 
+	def test_parse_df_handles_long_hgvs_and_reported_hgvs_c(self):
+		import polars as pl
+		from apps.core.management.commands.init_db import parse_df
+		from apps.core.models import PatientVariant, TranscriptAnnotation
+
+		long_hgvs = "NM_000546.5:c.100delins" + ("A" * 600)
+
+		df = pl.DataFrame({
+			"Name": ["Patient_Long_HGVS"],
+			"Symbol": ["TP53"],
+			"Variant_class": ["DEL"],
+			"Chr": ["chr17"],
+			"Coordinate": [7577200],
+			"Reference": ["A" * 600],
+			"Alternate": ["T"],
+			"VEP dbSNP ID": ["rs88888"],
+			"HGVSc": [long_hgvs],
+			"HGVSp": ["p.Arg100delins" + ("Gln" * 150)],
+			"Kategorie": ["3"],
+			"Komentář": ["Long HGVS test"],
+			"Exon": ["5"],
+			"Genotype": ["het"],
+			"gnomAD AF": ["0.0001"],
+		})
+
+		parse_df(df, "long_hgvs_test.xlsx")
+
+		pv = PatientVariant.objects.get(variant__dbsnp="rs88888")
+		self.assertEqual(pv.reported_hgvs_c, long_hgvs)
+
+		ann = TranscriptAnnotation.objects.get(variant__dbsnp="rs88888")
+		self.assertEqual(ann.transcript_base, "NM_000546")
+		self.assertEqual(ann.hgvs_c, "c.100delins" + ("A" * 600))
+
+
 
 
