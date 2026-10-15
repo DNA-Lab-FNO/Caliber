@@ -1,18 +1,23 @@
 <script lang="ts">
+    import { getCookie, parseResponse } from "../lib/api";
+
+  interface Props {
+    onunauthorized?: () => void
+  }
+
+  interface UploadPayload {
+    filename?: string
+    filenames?: string[]
+  }
+
+  let { onunauthorized }: Props = $props()
+
   let uploadFiles = $state<File[]>([])
   let uploadMessage = $state('')
   let uploadError = $state('')
   let isUploading = $state(false)
   let isDragActive = $state(false)
   let fileInputRef = $state<HTMLInputElement | null>(null)
-
-  const getCookie = (name: string) => {
-    const cookie = document.cookie
-      .split(';')
-      .map((value) => value.trim())
-      .find((value) => value.startsWith(`${name}=`))
-    return cookie ? decodeURIComponent(cookie.split('=')[1]) : ''
-  }
 
   const handleUpload = async () => {
     uploadMessage = ''
@@ -34,11 +39,14 @@
         },
         body: formData,
       })
-      if (!response.ok) {
-        const payload = (await response.json()) as { error?: string }
-        throw new Error(payload.error || 'Upload failed.')
+
+      if (response.status === 401) {
+          onunauthorized?.()
+          return
       }
-      const payload = (await response.json()) as { filename?: string; filenames?: string[] }
+
+      const payload = await parseResponse<UploadPayload>(response)
+
       if (payload.filenames && payload.filenames.length > 0) {
         uploadMessage = `Nahráno souborů: ${payload.filenames.length}.`
       } else if (payload.filename) {
@@ -46,6 +54,7 @@
       } else {
         uploadMessage = 'Soubor(y) byly nahrány.'
       }
+      
       uploadFiles = []
       if (fileInputRef) {
         fileInputRef.value = ''

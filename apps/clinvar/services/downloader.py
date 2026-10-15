@@ -65,3 +65,4 @@ def download_monthly_release():
         logger.error(
             "CRITICAL: Download completed but MD5 verification failed. The file might be corrupted."
         )
+        raise IOError("ClinVar release MD5 verification failed. Aborting sync.")

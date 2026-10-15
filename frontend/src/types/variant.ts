@@ -7,6 +7,7 @@ export type ClinVarData = {
 export type Variant = {
     source: 'clinic' | 'clinvar_catalog'
     patient_id: string
+    created_by: string
     gene: string
     variant: string
     dbsnp: string

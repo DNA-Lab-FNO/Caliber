@@ -199,10 +199,19 @@
     return String(value)
   }
  
-  const categoryClass = (value: number | string | null | undefined) => {
+  const categoryClass = (value: number | null | undefined) => {
     if (value === null || value === undefined) return 'category'
-    const cleanVal = String(value).replace('.', '-');
-    return `category c${cleanVal}`;
+    if (value === 0) return 'category c0'
+    if (value === 1) return 'category c1'
+    if (value === 1.5) return 'category c1-2'
+    if (value === 2) return 'category c2'
+    if (value === 2.5) return 'category c2-3'
+    if (value === 3) return 'category c3'
+    if (value === 3.5) return 'category c3-4'
+    if (value === 4) return 'category c4'
+    if (value === 4.5) return 'category c4-5'
+    if (value === 5) return 'category c5'
+    return 'category'
   }
 
   const clinvar_variant_url = (variant_id: string | undefined) => {

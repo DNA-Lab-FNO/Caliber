@@ -50,6 +50,11 @@
         <span class="muted">Komentář k variantě</span>
         <p>{variant.comment || 'Žádný komentář není k dispozici.'}</p>
       </div>
+      
+      <div class="detail-group">
+        <span class="muted">Vytvořil</span>
+        <p>{variant.created_by}</p>
+      </div>
     </div>
   </div>
 </div>

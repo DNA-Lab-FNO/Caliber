@@ -61,10 +61,163 @@ input {
   animation: lift 0.8s ease both;
 }
 
+.auth-shell {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  gap: 1.5rem;
+  animation: lift 0.8s ease both;
+}
+
+.auth-header h1 {
+  font-size: 2.25rem;
+  font-weight: 700;
+  margin: 0;
+  text-align: center;
+}
+
+.auth-card {
+  width: 90%;
+  max-width: 440px; /* The visual sweet spot for login forms */
+  padding: 2.25rem;
+}
+
+/* Header/Title scale adjustment */
+.auth-header h1 {
+  font-size: 3rem; /* Slightly larger heading to match the bigger card */
+  font-weight: 800;
+  margin-bottom: 0.5rem;
+  letter-spacing: -0.02em;
+}
+
+/* Switcher Buttons (Přihlášení / Registrace) */
+.auth-switcher {
+  display: flex;
+  gap: 0.75rem;
+  margin-bottom: 2rem;
+}
+
+.auth-toggle {
+  flex: 1;
+  padding: 0.75rem 1rem;
+  font-size: 1rem;
+  font-weight: 500;
+  border-radius: 0.75rem;
+}
+
+/* Form Fields & Inputs */
+.auth-form {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+.auth-field span {
+  display: block;
+  font-size: 0.85rem;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  margin-bottom: 0.5rem;
+  opacity: 0.7;
+}
+
+.auth-field input {
+  width: 100%;
+  padding: 0.875rem 1.125rem; /* Taller, comfortable inputs */
+  font-size: 1rem;
+  border-radius: 0.75rem;
+  border: 1px solid rgba(0, 0, 0, 0.12);
+  background-color: rgba(255, 255, 255, 0.8);
+  box-sizing: border-box;
+}
+
+/* Action Submit Button */
+.auth-submit {
+  width: 100%;
+  padding: 0.875rem 1.5rem;
+  font-size: 1rem;
+  font-weight: 600;
+  border-radius: 0.75rem;
+  margin-top: 0.75rem;
+  cursor: pointer;
+}
+
+.auth-switcher,
+.topbar-main,
+.topbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.topbar-main {
+  justify-content: space-between;
+  gap: 18px;
+}
+
+.topbar-actions {
+  margin-left: auto;
+}
+
+.user-chip {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 10px 14px;
+  border-radius: 18px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+}
+
+.user-chip__label {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  color: var(--ink-soft);
+}
+
+.user-chip__value {
+  font-size: 14px;
+  color: var(--ink);
+}
+
+.logout-btn,
+.auth-toggle,
+.auth-submit {
+  min-height: 46px;
+}
+
+.auth-form {
+  display: grid;
+  gap: 14px;
+}
+
+.auth-field span {
+  letter-spacing: 0.08em;
+}
+
+.auth-field input {
+  font-size: 15px;
+}
+
+.auth-submit {
+  width: 100%;
+  justify-content: center;
+  margin-top: 4px;
+}
+
+.auth-loading {
+  max-width: 560px;
+}
+
 .topbar {
   display: flex;
   justify-content: space-between;
-  align-items: center;
+  align-items: flex-start;
   gap: 24px;
 }
 
@@ -747,6 +900,31 @@ input {
   font-size: 0.85rem;
 }
 
+.nav-links {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.nav-btn {
+  padding: 10px 20px;
+  font-size: 14px;
+  font-weight: 500;
+  transition: all 0.2s ease;
+}
+
+/* When the view is active, morph it to use your deep teal/accent style definitions */
+.nav-btn.active {
+  background: var(--teal);
+  color: #fff;
+  border-color: var(--teal);
+}
+
+.nav-btn.active:hover {
+  box-shadow: 0 8px 20px -12px rgba(63, 111, 116, 0.7);
+}
+
 @keyframes lift {
   from {
     opacity: 0;
@@ -765,8 +943,13 @@ input {
   }
 
   .search,
-  .grid {
+  .grid,
+  .auth-shell {
     grid-template-columns: 1fr;
+  }
+
+  .auth-hero {
+    padding: 0;
   }
 
   .row {
@@ -776,5 +959,25 @@ input {
 
   .row.head {
     display: none;
+  }
+
+  .nav-links {
+    width: 100%;
+    justify-content: flex-start;
+    margin-top: 8px;
+  }
+
+  .topbar-main {
+    width: 100%;
+  }
+
+  .topbar-actions {
+    width: 100%;
+    margin-left: 0;
+    justify-content: space-between;
+  }
+
+  .user-chip {
+    flex: 1;
   }
 }

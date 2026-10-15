@@ -100,6 +100,17 @@ ClassificationEnum._EXCEL_MAP = {
     "1": ClassificationEnum.BENIGN,
 }
 
+ClassificationEnum._CLASSIFICATION_SCORE_TO_STRING = {
+    5.0: "5",
+    4.5: "4-5",
+    4.0: "4",
+    3.0: "3",
+    2.5: "2-3",
+    2.0: "2",
+    1.5: "1-2",
+    1.0: "1",
+}
+
 ClassificationEnum._SCORES = {
     "Pathogenic": 5.0,
     "Pathogenic/Likely pathogenic": 4.5,
