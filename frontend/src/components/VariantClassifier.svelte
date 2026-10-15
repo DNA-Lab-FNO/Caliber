@@ -1,4 +1,6 @@
 <script lang="ts">
+    import { getCookie } from "../lib/api";
+
   interface Props {
     onunauthorized?: () => void
   }
@@ -52,13 +54,6 @@
     selectedFile = null;
     errorMessage = '';
     successMessage = '';
-  }
-
-  function getCookie(name: string): string {
-    const value = `; ${document.cookie}`;
-    const parts = value.split(`; ${name}=`);
-    if (parts.length === 2) return parts.pop()?.split(';').shift() || '';
-    return '';
   }
   
   async function handleSubmit(event: SubmitEvent) {

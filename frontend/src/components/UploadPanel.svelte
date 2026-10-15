@@ -1,6 +1,13 @@
 <script lang="ts">
+    import { getCookie, parseResponse } from "../lib/api";
+
   interface Props {
     onunauthorized?: () => void
+  }
+
+  interface UploadPayload {
+    filename?: string
+    filenames?: string[]
   }
 
   let { onunauthorized }: Props = $props()
@@ -11,14 +18,6 @@
   let isUploading = $state(false)
   let isDragActive = $state(false)
   let fileInputRef = $state<HTMLInputElement | null>(null)
-
-  const getCookie = (name: string) => {
-    const cookie = document.cookie
-      .split(';')
-      .map((value) => value.trim())
-      .find((value) => value.startsWith(`${name}=`))
-    return cookie ? decodeURIComponent(cookie.split('=')[1]) : ''
-  }
 
   const handleUpload = async () => {
     uploadMessage = ''
@@ -40,34 +39,14 @@
         },
         body: formData,
       })
-      if (!response.ok) {
-        if (response.status === 401) {
+
+      if (response.status === 401) {
           onunauthorized?.()
           return
-        }
-        let errorMsg = `Upload failed (HTTP ${response.status})`
-        try {
-          const contentType = response.headers.get('content-type')
-          if (contentType && contentType.includes('application/json')) {
-            const payload = (await response.json()) as { error?: string }
-            errorMsg = payload.error || errorMsg
-          } else {
-            if (response.status === 413) {
-              errorMsg = 'Soubor je příliš velký pro nahrání (HTTP 413 Request Entity Too Large).'
-            } else if (response.status === 403) {
-              errorMsg = 'Přístup odepřen (HTTP 403 CSRF verification failed). Obnovte stránku a zkuste to znovu.'
-            } else if (response.status === 502 || response.status === 504) {
-              errorMsg = 'Časový limit serveru vypršel (HTTP 502/504). Zpracování trvalo příliš dlouho.'
-            } else {
-              errorMsg = `Chyba serveru (HTTP ${response.status}). Zkontrolujte logy aplikace.`
-            }
-          }
-        } catch {
-          // ignore parsing error and keep errorMsg
-        }
-        throw new Error(errorMsg)
       }
-      const payload = (await response.json()) as { filename?: string; filenames?: string[] }
+
+      const payload = await parseResponse<UploadPayload>(response)
+
       if (payload.filenames && payload.filenames.length > 0) {
         uploadMessage = `Nahráno souborů: ${payload.filenames.length}.`
       } else if (payload.filename) {
@@ -75,6 +54,7 @@
       } else {
         uploadMessage = 'Soubor(y) byly nahrány.'
       }
+      
       uploadFiles = []
       if (fileInputRef) {
         fileInputRef.value = ''
