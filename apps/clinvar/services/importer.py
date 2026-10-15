@@ -173,7 +173,8 @@ class ClinVarBulkImporter:
 
             # B. Transcript Annotation Child Records
             for trans in item.transcript_annotations:
-                if trans.hgvs_c and (v_id, trans.hgvs_c) not in seen_transcripts:
+                trans_key = (v_id, trans.transcript_base, trans.hgvs_c)
+                if trans.hgvs_c and trans_key not in seen_transcripts:
                     transcript_instances.append(
                         TranscriptAnnotation(
                             variant_id=v_id,
@@ -183,7 +184,7 @@ class ClinVarBulkImporter:
                             hgvs_p=trans.hgvs_p or "",
                         )
                     )
-                    seen_transcripts.add((v_id, trans.hgvs_c))
+                    seen_transcripts.add(trans_key)
 
             # C. ClinVar Metadata Domain Records
             if v_id not in seen_clinvar:

@@ -96,3 +96,52 @@ class ClinVarBulkImporterTests(TestCase):
         self.assertEqual(variants.count(), 1)
         self.assertEqual(variants.first().dbsnp, "rs999000")
 
+    def test_import_long_hgvs_strings_and_distinct_transcripts(self):
+        long_hgvs_c = "c.100delins" + ("A" * 1200)
+        long_hgvs_p = "p.Ala10delins" + ("Met" * 300)
+
+        variant_item = TransformedVariant(
+            variation_id=2001,
+            variation_type="Indel",
+            chromosome="chr2",
+            position=1000000,
+            ref_allele="A",
+            alt_allele="T",
+            dbsnp="rs111222",
+            disease="Test Condition",
+            last_updated="2026-01-01",
+            genes=["GENE1"],
+            transcript_annotations=[
+                # Transcript 1 with long HGVS
+                TranscriptAnnotation(
+                    transcript_base="NM_001001",
+                    transcript_version=1,
+                    hgvs_c=long_hgvs_c,
+                    hgvs_p=long_hgvs_p,
+                ),
+                # Transcript 2 with same hgvs_c but different transcript_base
+                TranscriptAnnotation(
+                    transcript_base="NM_001002",
+                    transcript_version=2,
+                    hgvs_c=long_hgvs_c,
+                    hgvs_p=long_hgvs_p,
+                ),
+            ],
+            classification=ClassificationEnum.PATHOGENIC,
+        )
+
+        importer = ClinVarBulkImporter(batch_size=1)
+        importer.add_variant(variant_item)
+
+        var = GeneVariant.objects.get(chromosome="chr2", position=1000000)
+        annotations = var.annotations.all().order_by("transcript_base")
+
+        # Verify both transcript annotations were created successfully
+        self.assertEqual(annotations.count(), 2)
+        self.assertEqual(annotations[0].transcript_base, "NM_001001")
+        self.assertEqual(annotations[0].hgvs_c, long_hgvs_c)
+        self.assertEqual(annotations[0].hgvs_p, long_hgvs_p)
+        self.assertEqual(annotations[1].transcript_base, "NM_001002")
+        self.assertEqual(annotations[1].hgvs_c, long_hgvs_c)
+
+
