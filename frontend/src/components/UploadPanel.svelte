@@ -45,8 +45,27 @@
           onunauthorized?.()
           return
         }
-        const payload = (await response.json()) as { error?: string }
-        throw new Error(payload.error || 'Upload failed.')
+        let errorMsg = `Upload failed (HTTP ${response.status})`
+        try {
+          const contentType = response.headers.get('content-type')
+          if (contentType && contentType.includes('application/json')) {
+            const payload = (await response.json()) as { error?: string }
+            errorMsg = payload.error || errorMsg
+          } else {
+            if (response.status === 413) {
+              errorMsg = 'Soubor je příliš velký pro nahrání (HTTP 413 Request Entity Too Large).'
+            } else if (response.status === 403) {
+              errorMsg = 'Přístup odepřen (HTTP 403 CSRF verification failed). Obnovte stránku a zkuste to znovu.'
+            } else if (response.status === 502 || response.status === 504) {
+              errorMsg = 'Časový limit serveru vypršel (HTTP 502/504). Zpracování trvalo příliš dlouho.'
+            } else {
+              errorMsg = `Chyba serveru (HTTP ${response.status}). Zkontrolujte logy aplikace.`
+            }
+          }
+        } catch {
+          // ignore parsing error and keep errorMsg
+        }
+        throw new Error(errorMsg)
       }
       const payload = (await response.json()) as { filename?: string; filenames?: string[] }
       if (payload.filenames && payload.filenames.length > 0) {
