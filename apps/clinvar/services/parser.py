@@ -95,8 +95,6 @@ def process_variation(variation_elem: etree.Element) -> ParsedVariant | None:
 
     chromosome, position, ref_allele, alt_allele = parse_variation_coding(allele_record)
 
-    logger.info(f"Processing variation with ID: {var_id}")
-
     genes = _get_genes(allele_record)
     dbsnp = _get_dbsnp(allele_record)
 
