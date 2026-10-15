@@ -1,9 +1,22 @@
+from datetime import datetime, timezone as dt_timezone
 import logging
 from django.db import transaction
 from apps.clinvar.models import ClinVarGeneVariant
-from apps.core.models import Gene, GeneVariant, TranscriptAnnotation
+from apps.core.models import Gene, GeneVariant, TranscriptAnnotation, compute_allele_hash
 
 logger = logging.getLogger(__name__)
+
+
+def parse_last_updated(date_str: str | None) -> datetime:
+    if not date_str:
+        return datetime(2026, 1, 1, tzinfo=dt_timezone.utc)
+    try:
+        dt = datetime.fromisoformat(date_str)
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=dt_timezone.utc)
+        return dt
+    except Exception:
+        return datetime(2026, 1, 1, tzinfo=dt_timezone.utc)
 
 
 class ClinVarBulkImporter:
@@ -54,8 +67,7 @@ class ClinVarBulkImporter:
                         v.chromosome,
                         v.position,
                         v.variation_type,
-                        v.ref_allele,
-                        v.alt_allele,
+                        v.allele_hash,
                     ): v.id
                     for v in variant_instances
                 }
@@ -96,12 +108,13 @@ class ClinVarBulkImporter:
                 variation_type=item.variation_type,
                 ref_allele=item.ref_allele,
                 alt_allele=item.alt_allele,
+                allele_hash=compute_allele_hash(item.ref_allele, item.alt_allele),
                 dbsnp=item.dbsnp or "",
             )
             for item in items
         ]
 
-        # On conflict (duplicate coordinates), refresh the dbSNP field value and return the ID
+        # On conflict (duplicate coordinates + allele hash), refresh the dbSNP field value and return the ID
         return GeneVariant.objects.bulk_create(
             variant_instances,
             update_conflicts=True,
@@ -109,8 +122,7 @@ class ClinVarBulkImporter:
                 "chromosome",
                 "position",
                 "variation_type",
-                "ref_allele",
-                "alt_allele",
+                "allele_hash",
             ],
             update_fields=["dbsnp"],
         )
@@ -133,10 +145,10 @@ class ClinVarBulkImporter:
                     item.chromosome,
                     item.position,
                     item.variation_type,
-                    item.ref_allele,
-                    item.alt_allele,
+                    compute_allele_hash(item.ref_allele, item.alt_allele),
                 )
             )
+
             if not v_id:
                 continue
 
@@ -170,9 +182,7 @@ class ClinVarBulkImporter:
                         gene_variant_id=v_id,
                         clinvar_id=str(item.variation_id),
                         clinvar_classification=item.classification.score,
-                        last_updated=item.last_updated
-                        if item.last_updated
-                        else "2026-01-01",
+                        last_updated=parse_last_updated(item.last_updated),
                     )
                 )
                 seen_clinvar.add(v_id)

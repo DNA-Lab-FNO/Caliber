@@ -16,6 +16,7 @@ from apps.core.models import (
     PatientVariant,
     TranscriptAnnotation,
     User,
+    compute_allele_hash,
 )
 
 logger = logging.getLogger(__name__)
@@ -184,13 +185,13 @@ def persist_row(
     else:
         patient = caches.patient_cache[data["patient_id"]]
 
-    # 2. GeneVariant Lookup (Using the updated genomic coordinates unique constraint)
+    # 2. GeneVariant Lookup (Using the genomic coordinates + allele_hash unique constraint)
+    allele_hash = compute_allele_hash(data["ref_allele"], data["alt_allele"])
     variant_key = (
         data["chromosome"],
         data["position"],
         data["variation_type"],
-        data["ref_allele"],
-        data["alt_allele"],
+        allele_hash,
     )
 
     if variant_key not in caches.variant_cache:
@@ -198,20 +199,30 @@ def persist_row(
             chromosome=data["chromosome"],
             position=data["position"],
             variation_type=data["variation_type"],
-            ref_allele=data["ref_allele"],
-            alt_allele=data["alt_allele"],
+            allele_hash=allele_hash,
             defaults={
+                "ref_allele": data["ref_allele"] or "",
+                "alt_allele": data["alt_allele"] or "",
                 "gnomAD": data["gnomAD"],
                 "dbsnp": data["dbSNP"],
             },
         )
 
+        updated_fields = []
+        if not gene_variant.ref_allele and data["ref_allele"]:
+            gene_variant.ref_allele = data["ref_allele"]
+            updated_fields.append("ref_allele")
+        if not gene_variant.alt_allele and data["alt_allele"]:
+            gene_variant.alt_allele = data["alt_allele"]
+            updated_fields.append("alt_allele")
         if not gene_variant.gnomAD and data["gnomAD"]:
             gene_variant.gnomAD = data["gnomAD"]
-            gene_variant.save(update_fields=["gnomAD"])
+            updated_fields.append("gnomAD")
         if not gene_variant.dbsnp and data["dbSNP"]:
             gene_variant.dbsnp = data["dbSNP"]
-            gene_variant.save(update_fields=["dbsnp"])
+            updated_fields.append("dbsnp")
+        if updated_fields:
+            gene_variant.save(update_fields=updated_fields)
 
         caches.variant_cache[variant_key] = gene_variant
     else:

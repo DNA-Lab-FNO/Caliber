@@ -111,3 +111,68 @@ class InitDBCacheTests(TestCase):
 			parse_df(df, "faulty.xlsx")
 
 
+class GeneVariantLongAlleleTests(TestCase):
+	def test_genevariant_save_populates_allele_hash_and_supports_long_alleles(self):
+		from django.db import IntegrityError
+		from apps.core.models import GeneVariant, compute_allele_hash
+
+		long_ref = "A" * 5000
+		long_alt = "T" * 5000
+
+		variant = GeneVariant.objects.create(
+			chromosome="chr1",
+			position=123456,
+			variation_type="Deletion",
+			ref_allele=long_ref,
+			alt_allele=long_alt,
+		)
+
+		expected_hash = compute_allele_hash(long_ref, long_alt)
+		self.assertEqual(variant.allele_hash, expected_hash)
+		self.assertEqual(len(variant.allele_hash), 64)
+
+		# Verify UniqueConstraint prevents duplicate coordinates + allele_hash
+		with self.assertRaises(IntegrityError):
+			GeneVariant.objects.create(
+				chromosome="chr1",
+				position=123456,
+				variation_type="Deletion",
+				ref_allele=long_ref,
+				alt_allele=long_alt,
+			)
+
+	def test_parse_df_handles_long_alleles(self):
+		import polars as pl
+		from apps.core.management.commands.init_db import parse_df
+		from apps.core.models import GeneVariant, compute_allele_hash
+
+		long_ref = "C" * 1000
+		long_alt = "G" * 1000
+
+		df = pl.DataFrame({
+			"Name": ["Patient_Long"],
+			"Symbol": ["TP53"],
+			"Variant_class": ["SNV"],
+			"Chr": ["chr17"],
+			"Coordinate": [7577120],
+			"Reference": [long_ref],
+			"Alternate": [long_alt],
+			"VEP dbSNP ID": ["rs99999"],
+			"HGVSc": ["NM_000546.5:c.100C>G"],
+			"HGVSp": ["p.Arg34Gln"],
+			"Kategorie": ["4"],
+			"Komentář": ["Long allele test"],
+			"Exon": ["4"],
+			"Genotype": ["het"],
+			"gnomAD AF": ["0.00001"],
+		})
+
+		parse_df(df, "long_allele_test.xlsx")
+
+		var = GeneVariant.objects.get(dbsnp="rs99999")
+		self.assertEqual(var.ref_allele, long_ref)
+		self.assertEqual(var.alt_allele, long_alt)
+		self.assertEqual(var.allele_hash, compute_allele_hash(long_ref, long_alt))
+
+
+

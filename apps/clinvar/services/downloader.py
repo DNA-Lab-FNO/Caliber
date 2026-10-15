@@ -31,11 +31,19 @@ def verify_md5(file_path: Path, expected_md5: str) -> bool:
 def download_monthly_release():
     TARGET_DIR.mkdir(parents=True, exist_ok=True)
 
-    logger.info("Fetching expected MD5 hash from NCBI...")
-    with urllib.request.urlopen(MD5_URL) as response:
-        # ClinVar MD5 files look like: "e4d3c2b1...  ClinVarVCVRelease_2026-06-01.xml.gz"
-        # We split to isolate just the hex hash string
-        expected_md5 = response.read().decode("utf-8").split()[0].strip()
+    expected_md5 = None
+    try:
+        logger.info("Fetching expected MD5 hash from NCBI...")
+        with urllib.request.urlopen(MD5_URL, timeout=10) as response:
+            expected_md5 = response.read().decode("utf-8").split()[0].strip()
+    except Exception as e:
+        if LOCAL_FILE.exists() and LOCAL_FILE.stat().st_size > 100 * 1024 * 1024:
+            logger.warning(
+                f"Could not reach NCBI to check latest MD5 ({e}), but local ClinVar archive exists. Proceeding with existing archive."
+            )
+            return
+        raise
+
 
     # 2. Cache Check: Compare with local file if it exists
     if LOCAL_FILE.exists():

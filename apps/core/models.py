@@ -1,8 +1,15 @@
+import hashlib
 from django.contrib.auth.models import AbstractBaseUser, BaseUserManager, PermissionsMixin
 from django.db import models
 from django.utils import timezone
 
 from caliber import settings
+
+
+def compute_allele_hash(ref: str | None, alt: str | None) -> str:
+    r = ref or ""
+    a = alt or ""
+    return hashlib.sha256(f"{r}>{a}".encode()).hexdigest()
 
 
 class UserManager(BaseUserManager):
@@ -65,13 +72,19 @@ class GeneVariant(models.Model):
     chromosome = models.CharField(max_length=8)
     position = models.BigIntegerField(null=True)
 
-    ref_allele = models.CharField(max_length=255)
-    alt_allele = models.CharField(max_length=255)
+    ref_allele = models.TextField()
+    alt_allele = models.TextField()
+    allele_hash = models.CharField(max_length=64, blank=True, db_index=True)
 
     variation_type = models.CharField(max_length=32, blank=True)
 
     dbsnp = models.CharField(max_length=64, blank=True)
     gnomAD = models.CharField(max_length=64, blank=True)
+
+    def save(self, *args, **kwargs):
+        if not self.allele_hash:
+            self.allele_hash = compute_allele_hash(self.ref_allele, self.alt_allele)
+        super().save(*args, **kwargs)
 
     class Meta:
         constraints = [
@@ -80,8 +93,7 @@ class GeneVariant(models.Model):
                     "chromosome",
                     "position",
                     "variation_type",
-                    "ref_allele",
-                    "alt_allele",
+                    "allele_hash",
                 ],
                 name="unique_genomic_variant",
             )
@@ -91,6 +103,7 @@ class GeneVariant(models.Model):
             models.Index(fields=["dbsnp"]),
             models.Index(fields=["chromosome", "position"]),
         ]
+
 
 
 class TranscriptAnnotation(models.Model):
@@ -104,19 +117,20 @@ class TranscriptAnnotation(models.Model):
     )
 
     transcript_base = models.CharField(
-        max_length=32, db_index=True, null=True, blank=True
+        max_length=64, db_index=True, null=True, blank=True
     )  # e.g., "NM_000059"
     transcript_version = models.IntegerField(
         null=True, blank=True
     )  # e.g., 3 // The version might change over time, so we store it separately from the base transcript ID.
     hgvs_c = models.CharField(
-        max_length=120, db_index=True, null=True, blank=True
+        max_length=512, db_index=True, null=True, blank=True
     )  # e.g., "c.432A>G"
-    hgvs_p = models.CharField(max_length=120, blank=True)
+    hgvs_p = models.CharField(max_length=512, blank=True)
 
     exon = models.CharField(
-        max_length=32, blank=True
+        max_length=64, blank=True
     )  # Exon number is transcript-dependent
+
 
     class Meta:
         constraints = [
