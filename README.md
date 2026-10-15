@@ -14,6 +14,7 @@
   - [1. Clinical Excel / CSV Ingestion Engine](#1-clinical-excel--csv-ingestion-engine)
   - [2. ClinVar Bulk Synchronization Pipeline](#2-clinvar-bulk-synchronization-pipeline)
   - [3. Two-Tier Search Resolution Engine](#3-two-tier-search-resolution-engine)
+  - [4. Automated Classification Suggestion Pipeline](#4-automated-classification-suggestion-pipeline)
 - [Pathogenicity Classification Scheme](#pathogenicity-classification-scheme)
 - [Project Directory Structure](#project-directory-structure)
 - [Local Development Setup](#local-development-setup)
@@ -28,79 +29,85 @@
 
 ### System Flow & Component Overview
 
-The application is structured into four core functional layers: a reactive Single-Page Application (SPA) frontend, a high-throughput Django REST backend, an asynchronous data ingestion & sync engine, and a relational PostgreSQL database.
+The application is structured into four core functional layers: a reactive Single-Page Application (SPA) frontend with view switching, a high-throughput Django REST backend with user authentication, an asynchronous data ingestion & sync engine, and a relational PostgreSQL database.
 
 ```mermaid
 flowchart TD
     subgraph ClientLayer ["1. Presentation Layer (Frontend)"]
         Browser["Clinical Geneticist / Researcher"]
         subgraph SvelteApp ["Svelte 5 + Vite SPA"]
+            NavComp["Topbar
+            (View Switcher & User Auth)"]
             SearchComp["SearchForm
             (HGVS, Gene, dbSNP)"]
             ResultsComp["ResultsTable
-            (Pathogenicity Badges, Zygosity)"]
+            (Pathogenicity Badges, Uploader Audit)"]
             ModalComp["VariantModal
             (Annotations & Transcript Details)"]
             UploadComp["UploadPanel
-            (Drag-and-Drop Batch File Ingest)"]
+            (Clinical Batch File Ingest)"]
+            ClassifyComp["VariantClassifier
+            (Excel Ingestion & Annotated Download)"]
         end
         Browser --> SvelteApp
     end
 
     subgraph APILayer ["2. Application & API Layer (Django 6.0)"]
-        CoreRouter["URL Router & Views
-        (apps.core, apps.api)"]
+        CoreRouter["URL Router
+        (apps.core.urls, apps.api.urls)"]
+        AuthSvc["Auth Controllers
+        (login, register, status, logout)"]
         SearchSvc["Search Controller
         (search_variants)"]
         UploadSvc["Upload Controller
         (upload_variants_file)"]
+        ClassifySvc["Classifier Controller
+        (classify_variants)"]
 
+        CoreRouter --> AuthSvc
         CoreRouter --> SearchSvc
         CoreRouter --> UploadSvc
+        CoreRouter --> ClassifySvc
     end
 
-    subgraph PipelineLayer ["3. Ingestion & Synchronization Engines"]
-        subgraph BatchPipeline ["Excel / CSV Ingestion Engine"]
-            PolarsEngine["Polars DataFrame Engine
-            (Memory-efficient streaming)"]
-            Normalizer["Variant Normalizer
-            (SNV, DEL, INS, DUP, INV, STR)"]
-            MemCache["In-Memory Lookup Caches
-            (Genes, Variants, Annotations)"]
-        end
-
-        subgraph ClinVarPipeline ["ClinVar Sync Engine (apps.clinvar)"]
-            FTPDownloader["NCBI FTP Streamer & MD5 Verifier"]
-            XMLParser["Iterative XML Stream Parser"]
-            BulkImporter["Bulk Upsert Pipeline (10,000 / batch)"]
-        end
+    subgraph PipelineLayer ["3. Ingestion & Service Layer (apps.api.services)"]
+        QueryService["query_variants()
+        (Two-tier clinical + ClinVar resolution)"]
+        UploadService["process_uploaded_variants_file()
+        (Polars streaming DataFrame parser)"]
+        AnnotateService["annotate_excel_workbook()
+        (openpyxl column matching & classification)"]
+        ClinVarSync["ClinVar Ingestion Pipeline
+        (NCBI XML streaming & bulk upsert)"]
     end
 
     subgraph DataLayer ["4. Domain Data Layer (PostgreSQL 16)"]
-        subgraph DomainEntities ["Relational Schema"]
-            PatientEnt["Patient & GeneticReport"]
-            PatientVarEnt["PatientVariant (Observations)"]
-            GeneEnt["Gene & GeneVariant"]
-            AnnotationEnt["TranscriptAnnotation"]
-            ClinVarEnt["ClinVarGeneVariant"]
-        end
+        UserEnt["User (Auth & Permissions)"]
+        PatientEnt["Patient & GeneticReport (created_by FK)"]
+        PatientVarEnt["PatientVariant (Observations)"]
+        GeneEnt["Gene & GeneVariant"]
+        AnnotationEnt["TranscriptAnnotation"]
+        ClinVarEnt["ClinVarGeneVariant"]
     end
 
     %% Flow connections
-    SearchComp -->|GET /api/search/?query| SearchSvc
+    SearchComp -->|GET /api/search/| SearchSvc
     UploadComp -->|POST /api/upload/| UploadSvc
+    ClassifyComp -->|POST /api/classify/| ClassifySvc
+    NavComp -->|POST /auth/*| AuthSvc
 
-    SearchSvc -->|Tier 1: Query internal records| PatientVarEnt
-    SearchSvc -->|Tier 2: Fallback to ClinVar| ClinVarEnt
+    SearchSvc --> QueryService
+    UploadSvc --> UploadService
+    ClassifySvc --> AnnotateService
 
-    UploadSvc --> PolarsEngine
-    PolarsEngine --> Normalizer
-    Normalizer --> MemCache
-    MemCache -->|Atomic Transaction| DomainEntities
-
-    FTPDownloader --> XMLParser
-    XMLParser --> BulkImporter
-    BulkImporter -->|Postgres bulk upsert| DomainEntities
+    QueryService --> PatientVarEnt
+    QueryService --> ClinVarEnt
+    UploadService --> PatientEnt
+    UploadService --> GeneEnt
+    AnnotateService --> GeneEnt
+    AnnotateService --> ClinVarEnt
+    ClinVarSync --> GeneEnt
+    AuthSvc --> UserEnt
 ```
 
 ---
@@ -109,43 +116,62 @@ flowchart TD
 
 #### 1. Presentation Layer (`frontend/`)
 - **Technology**: **Svelte 5**, **TypeScript**, and **Vite** with **Tailwind/Custom CSS**.
-- **Key Modules**:
+- **Key Modules & View Switching**:
+  - `Topbar.svelte`: Provides top-level view navigation between **Variant Registry** and **Batch Classifier** modes, manages current user session state, and triggers the login/registration modal.
   - `SearchForm.svelte`: Provides real-time query inputs filtering by HGVS notation (e.g., `c.432A>G`), Gene symbol (e.g., `BRCA1`), or dbSNP ID (e.g., `rs123456`).
-  - `ResultsTable.svelte`: Clinical data grid rendering zygosity, variant types, genomic coordinates, and color-coded ACMG pathogenicity badges.
+  - `ResultsTable.svelte`: Clinical data grid rendering zygosity, variant types, genomic coordinates, uploader username (`created_by`), and color-coded ACMG pathogenicity badges.
   - `VariantModal.svelte`: Modal displaying detailed transcript-level annotations, exon numbers, protein alterations (`hgvs_p`), and clinical comments.
   - `UploadPanel.svelte`: Client-side drag-and-drop file uploader with validation for `.xlsx`, `.xls`, and `.csv` files.
+  - `VariantClassifier.svelte`: Specialized batch classification workspace where users upload an Excel spreadsheet and receive an annotated report with concordance evaluations.
 - **Production Delivery**: In production, Vite compiles the Svelte SPA into optimized static artifacts (`main.js` and `main.css`). These are served directly through Django and **WhiteNoise** with gzip/brotli compression and persistent HTTP caching headers.
 
 #### 2. API & Controller Layer (`apps/api/`, `apps/core/`)
 - **Technology**: **Django 6.0** (Python 3.12).
 - **Core Endpoints**:
   - `GET /api/search/`: Executes the two-tier variant discovery query with pagination metadata.
-  - `POST /api/upload/`: Receives uploaded spreadsheets, writes to transient storage, triggers streaming DataFrame parsing, and returns ingested row counts.
+  - `POST /api/upload/`: Ingests laboratory spreadsheets into the permanent database, tagged with the authenticated user (`created_by`).
+  - `POST /api/classify/`: Analyzes an uploaded spreadsheet and returns an annotated Excel file with classification suggestions and ClinVar concordance.
+  - `POST /auth/login/`, `POST /auth/register/`, `POST /auth/logout/`, `GET /auth/status/`: Session-based authentication endpoints.
   - `GET /`: Serves the bootstrapping HTML container (`core/index.html`) that mounts the Svelte SPA.
 
-#### 3. Ingestion & Pipeline Layer (`apps/core/management/`, `apps/clinvar/`)
+#### 3. Ingestion & Service Layer (`apps/api/services.py`, `apps/core/management/`, `apps/clinvar/`)
+- **Decoupled Business Logic**: Heavy database querying, DataFrame manipulation, and Excel generation are extracted into `apps/api/services.py`:
+  - `query_variants()`: Clean two-tier query resolution and pagination.
+  - `process_uploaded_variants_file()`: Safe temporary file handling and Polars DataFrame execution.
+  - `get_variant_hashes_from_db()`: Correlated subquery extraction and hashmap building.
+  - `annotate_excel_workbook()`: Column matching and cell-level openpyxl streaming.
 - **High-Performance Ingestion**: Uses **Polars** to achieve sub-second spreadsheet parsing without loading entire datasets into Python object memory.
-- **Deduplication Caches**: Employs dedicated in-memory dictionary and set caches during data imports to eliminate repetitive database lookups.
 - **ClinVar Synchronization**: Streams multi-gigabyte NCBI ClinVar release XML files row-by-row, resolving genes and upserting variants in 10,000-item database batches.
 
 #### 4. Persistence Layer (`apps/core/models.py`, `apps/clinvar/models.py`)
 - **Technology**: **PostgreSQL 16**.
+- **User Accountability**: Custom `User` model (`AbstractBaseUser`) with email authentication. Each `GeneticReport` tracks the uploading user via `created_by` ForeignKey.
 - **Integrity**: Enforces genomic coordinate uniqueness at the database level and uses composite indexes across frequently queried identifiers (`dbsnp`, `hgvs_c`, `chromosome + position`).
 
 ---
 
 ### Domain Model & Entity Relationships
 
-The data model cleanly decouples **biological variant definitions** from **patient-specific clinical observations** and **external reference databases**:
+The data model cleanly decouples **biological variant definitions** from **patient-specific clinical observations**, **user attribution**, and **external reference databases**:
 
 ```mermaid
 erDiagram
+    USER ||--o{ GENETIC_REPORT : "creates"
     PATIENT ||--o{ GENETIC_REPORT : "has"
     GENETIC_REPORT ||--o{ PATIENT_VARIANT : "contains"
     GENE ||--o{ GENE_VARIANT : "maps to (M:N)"
     GENE_VARIANT ||--o{ TRANSCRIPT_ANNOTATION : "annotated with (1:N)"
     GENE_VARIANT ||--o{ PATIENT_VARIANT : "observed in"
     GENE_VARIANT ||--o| CLINVAR_GENE_VARIANT : "referenced by (1:1)"
+
+    USER {
+        bigint id PK
+        string email UK "Primary Login Identifier"
+        string username "Display Name"
+        boolean is_staff
+        boolean is_active
+        datetime date_created
+    }
 
     PATIENT {
         bigint id PK
@@ -155,6 +181,7 @@ erDiagram
     GENETIC_REPORT {
         bigint id PK
         bigint patient_id FK
+        bigint created_by_id FK "Auditing User Link"
         string report_name "Source spreadsheet or run ID"
         datetime created_at
         datetime updated_at
@@ -206,9 +233,10 @@ erDiagram
 ```
 
 #### Key Relational Design Principles:
-1. **Physical Coordinate Identity**: `GeneVariant` records are uniquely keyed by `(chromosome, position, variation_type, ref_allele, alt_allele)`. This prevents duplicate entries regardless of how many patients carry the mutation.
-2. **Decoupled Transcript Annotations**: A single genomic variant can map to multiple transcripts (`TranscriptAnnotation`), preserving splice variant annotations independently of patient data.
-3. **Observation Decoupling**: Clinical data (such as zygosity, laboratory comments, and sample-specific classification) lives in `PatientVariant`, keeping the underlying variant catalog clean and reusable.
+1. **User Accountability**: `GeneticReport.created_by` attributes every uploaded dataset to a specific user, enabling audits of clinical data entries.
+2. **Physical Coordinate Identity**: `GeneVariant` records are uniquely keyed by `(chromosome, position, variation_type, ref_allele, alt_allele)`. This prevents duplicate entries regardless of how many patients carry the mutation.
+3. **Decoupled Transcript Annotations**: A single genomic variant can map to multiple transcripts (`TranscriptAnnotation`), preserving splice variant annotations independently of patient data.
+4. **Observation Decoupling**: Clinical data (such as zygosity, laboratory comments, and sample-specific classification) lives in `PatientVariant`, keeping the underlying variant catalog clean and reusable.
 
 ---
 
@@ -239,7 +267,7 @@ Uploaded Spreadsheet (.xlsx / .csv)
    [Atomic Transaction Persistence]
    - Upserts GeneVariant and links Gene (M2M)
    - Creates TranscriptAnnotation
-   - Creates GeneticReport linked to Patient
+   - Creates GeneticReport linked to Patient and request.user
    - Saves PatientVariant observation
 ```
 
@@ -273,12 +301,43 @@ When a user searches by variant notation, gene, or dbSNP ID:
                  [Return Patient Data] ┌──────────────────────────────┐
                  - Patient Name        │ Tier 2: ClinVar Fallback     │
                  - Lab Classification  │ Searches ClinVarGeneVariant  │
-                 - Zygosity & Comments └──────────────┬───────────────┘
-                                                      │
+                 - Uploader Username   └──────────────┬───────────────┘
+                 - Zygosity & Comments                │
                                                       ▼
                                             [Return Reference Data]
                                             - ClinVar Classification
                                             - Global Clinical Evidence
+```
+
+### 4. Automated Classification Suggestion Pipeline
+
+When a user uploads a spreadsheet into the **Variant Classifier** workspace (`POST /api/classify/`):
+
+```
+Uploaded Spreadsheet (.xlsx)
+              │
+              ▼
+   [Polars Column Identification]
+   (Detects Gene, Variant cDNA, and dbSNP columns)
+              │
+              ▼
+   [Bulk Hash Extraction (get_variant_hashes_from_db)]
+   - Correlated subquery retrieves latest clinical laboratory score
+   - ClinVar classification score retrieved
+   - Built into fast in-memory lookup hash maps
+              │
+              ▼
+   [openpyxl In-Place Annotation (annotate_excel_workbook)]
+   - Evaluates concordance vs discrepancy:
+     • Shoda (Klinika i ClinVar)
+     • Diskrepance (Neshoda hodnocení)
+     • Pouze v interní klinické DB
+     • Pouze v ClinVar katalogu
+     • Nenalezeno v DB
+   - Appends Zhodnoceni_Patogenity, ClinVar_ID, Status_Kontroly
+              │
+              ▼
+   Streamed .xlsx Download Response
 ```
 
 ---
@@ -304,10 +363,10 @@ Compound strings (such as `Pathogenic/Likely pathogenic` or `Likely benign/Uncer
 ```
 Caliber/
 ├── apps/
-│   ├── api/                     # REST API endpoints & search controllers
-│   │   ├── models.py            # API-specific models
-│   │   ├── views.py             # search_variants and upload_variants_file
-│   │   └── urls.py              # API routing (/api/search, /api/upload)
+│   ├── api/                     # REST API endpoints & services
+│   │   ├── services.py          # Extracted business logic, search, classification
+│   │   ├── views.py             # HTTP controllers (/api/search, /api/upload, /api/classify)
+│   │   └── urls.py              # API routing
 │   ├── clinvar/                 # ClinVar integration pipeline
 │   │   ├── models.py            # ClinVarGeneVariant reference model
 │   │   ├── services/
@@ -317,21 +376,22 @@ Caliber/
 │   │   │   └── transformer.py   # Coordinate & classification cleaning
 │   │   └── management/commands/
 │   │       └── sync_clinvar.py  # 'sync_clinvar' management command
-│   └── core/                    # Core genomic domain models & logic
-│       ├── models.py            # Gene, GeneVariant, Patient, PatientVariant
+│   └── core/                    # Core genomic domain models & auth
+│       ├── models.py            # User, Gene, GeneVariant, Patient, PatientVariant
+│       ├── auth.py              # Auth decorators and serializers
+│       ├── views.py             # Auth endpoints (login, register, logout, status)
 │       ├── enums.py             # ClassificationEnum & score mapping
-│       ├── views.py             # SPA HTML template bootstrap
 │       └── management/commands/
 │           └── init_db.py       # Excel spreadsheet batch ingestion
 ├── caliber/                     # Django project configuration
 │   ├── settings.py              # Production-tuned settings (WhiteNoise, DB)
 │   ├── urls.py                  # Root URL configuration
 │   └── wsgi.py                  # WSGI entrypoint for Gunicorn
-├── frontend/                    # Svelte 5 + Vite Single Page Application
+├── frontend/                    # Svelte 5 + TypeScript + Vite SPA
 │   ├── src/
-│   │   ├── components/          # SearchForm, ResultsTable, VariantModal, etc.
+│   │   ├── components/          # Topbar, SearchForm, ResultsTable, VariantModal, VariantClassifier
 │   │   ├── types/               # TypeScript interfaces for variants & API
-│   │   ├── App.svelte           # Root application view
+│   │   ├── App.svelte           # Root application view & mode switching
 │   │   └── main.ts              # Svelte client bootstrapper
 │   ├── package.json             # Frontend dependencies (pnpm)
 │   └── vite.config.ts           # Vite build config targeting Django static dir
