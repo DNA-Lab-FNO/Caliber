@@ -101,22 +101,32 @@ class ClinVarBulkImporter:
 
     def _bulk_upsert_variants(self, items) -> list:
         """Uses database engine indexing mechanics to handle conflicts in bulk."""
-        variant_instances = [
-            GeneVariant(
-                chromosome=item.chromosome,
-                position=item.position,
-                variation_type=item.variation_type,
-                ref_allele=item.ref_allele,
-                alt_allele=item.alt_allele,
-                allele_hash=compute_allele_hash(item.ref_allele, item.alt_allele),
-                dbsnp=item.dbsnp or "",
+        # Deduplicate instances within the batch by unique constraint key
+        # to prevent PostgreSQL CardinalityViolation: "ON CONFLICT DO UPDATE command cannot affect row a second time"
+        deduped_variants: dict[tuple, GeneVariant] = {}
+        for item in items:
+            key = (
+                item.chromosome,
+                item.position,
+                item.variation_type,
+                compute_allele_hash(item.ref_allele, item.alt_allele),
             )
-            for item in items
-        ]
+            if key not in deduped_variants:
+                deduped_variants[key] = GeneVariant(
+                    chromosome=item.chromosome,
+                    position=item.position,
+                    variation_type=item.variation_type,
+                    ref_allele=item.ref_allele,
+                    alt_allele=item.alt_allele,
+                    allele_hash=key[3],
+                    dbsnp=item.dbsnp or "",
+                )
+            elif item.dbsnp and not deduped_variants[key].dbsnp:
+                deduped_variants[key].dbsnp = item.dbsnp
 
         # On conflict (duplicate coordinates + allele hash), refresh the dbSNP field value and return the ID
         return GeneVariant.objects.bulk_create(
-            variant_instances,
+            list(deduped_variants.values()),
             update_conflicts=True,
             unique_fields=[
                 "chromosome",

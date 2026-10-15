@@ -54,3 +54,45 @@ class ClinVarBulkImporterTests(TestCase):
 
         var.refresh_from_db()
         self.assertEqual(var.dbsnp, "rs87654321")
+
+    def test_import_with_in_batch_duplicate_variants(self):
+        # Two items with the same genomic coordinates and alleles in the SAME batch
+        var1 = TransformedVariant(
+            variation_id=1001,
+            variation_type="SNV",
+            chromosome="chr1",
+            position=500000,
+            ref_allele="A",
+            alt_allele="C",
+            dbsnp="",
+            disease="Phenotype A",
+            last_updated="2026-01-01",
+            genes=["TEST1"],
+            transcript_annotations=[],
+            classification=ClassificationEnum.BENIGN,
+        )
+        var2 = TransformedVariant(
+            variation_id=1002,
+            variation_type="SNV",
+            chromosome="chr1",
+            position=500000,
+            ref_allele="A",
+            alt_allele="C",
+            dbsnp="rs999000",
+            disease="Phenotype B",
+            last_updated="2026-02-01",
+            genes=["TEST1"],
+            transcript_annotations=[],
+            classification=ClassificationEnum.PATHOGENIC,
+        )
+
+        importer = ClinVarBulkImporter(batch_size=10)
+        importer.add_variant(var1)
+        importer.add_variant(var2)
+        importer.flush()
+
+        # Should not crash with CardinalityViolation
+        variants = GeneVariant.objects.filter(chromosome="chr1", position=500000)
+        self.assertEqual(variants.count(), 1)
+        self.assertEqual(variants.first().dbsnp, "rs999000")
+
