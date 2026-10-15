@@ -7,8 +7,13 @@ export default defineConfig(({ mode }) => {
   const production = mode === 'production'
 
   return {
+    define: {
+      __API_BASE__: JSON.stringify(
+	    production ? '/caliber/api' : '/api'
+	  ),
+   	},
     plugins: [svelte({ emitCss: true })],
-    base: production ? '/static/svelte/' : '/',
+    base: production ? '/caliber/static/svelte/' : '/',
     server: {
       port: 5173,
       strictPort: true,

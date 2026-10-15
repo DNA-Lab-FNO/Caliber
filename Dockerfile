@@ -3,6 +3,8 @@
 # ==============================================================================
 FROM node:22-slim AS frontend-builder
 
+ENV NODE_OPTIONS="--tls-max-v1.2"
+
 WORKDIR /app/frontend
 
 # Install pnpm version 9 matching pnpm-lock.yaml

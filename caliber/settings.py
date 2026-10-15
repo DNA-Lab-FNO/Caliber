@@ -127,7 +127,7 @@ USE_TZ = True
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/6.0/howto/static-files/
 
-STATIC_URL = "/static/"
+STATIC_URL = "/caliber/static/"
 STATIC_ROOT = BASE_DIR / "staticfiles"
 
 # File upload limits (default in Django is only 2.5MB, insufficient for large genomic sheets)
@@ -148,8 +148,10 @@ STORAGES = {
     },
 }
 
-MEDIA_URL = "media/"
+MEDIA_URL = "/caliber/media/"
 MEDIA_ROOT = BASE_DIR / "media"
+
+FORCE_SCRIPT_NAME = "/caliber"
 
 LOG_LEVEL = env("LOG_LEVEL", default="INFO").upper()
 

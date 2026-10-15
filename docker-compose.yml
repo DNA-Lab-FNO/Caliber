@@ -43,7 +43,7 @@ services:
       CONN_MAX_AGE: ${CONN_MAX_AGE:-60}
     ports:
       # Expose port 8000 directly (accessible directly or via an external reverse proxy)
-      - "8000:8000"
+      - "127.0.0.1:8000:8000"
     volumes:
       # Persistent storage for uploaded media and reference dataset imports
       - caliber_data:/app/data
@@ -92,4 +92,3 @@ volumes:
     name: caliber_caddy_data
   caddy_config:
     name: caliber_caddy_config
-

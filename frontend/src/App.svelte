@@ -10,6 +10,9 @@
   import type { Variant } from './types/variant'
   import type { PaginationMeta } from './types/pagination'
 
+  const APP_BASE = import.meta.env.BASE_URL.replace(/\/$/, '')
+  const appUrl = (path: string) => `${APP_BASE}/${path.replace(/^\//, '')}`
+
   type SearchResponse = {
     results: Variant[]
     meta: PaginationMeta
@@ -85,7 +88,7 @@
 
   const loadSession = async () => {
     try {
-      const response = await fetch('/auth/status/', {
+      const response = await fetch(appUrl('/auth/status/'), {
         headers: {
           Accept: 'application/json',
         },
@@ -111,7 +114,9 @@
     authSubmitting = true
 
     try {
-      const endpoint = authMode === 'login' ? '/auth/login/' : '/auth/register/'
+      const endpoint = appUrl(
+        authMode === 'login' ? '/auth/login/' : '/auth/register/',
+      )
       const payload =
         authMode === 'login'
           ? {
@@ -153,7 +158,7 @@
 
   const handleLogout = async () => {
     try {
-      await fetch('/auth/logout/', {
+      await fetch(appUrl('/auth/logout/'), {
         method: 'POST',
         headers: {
           'X-CSRFToken': csrfToken(),
@@ -190,7 +195,9 @@
 
     isSearching = true
     try {
-      const response = await fetch(`/api/search/?${params.toString()}`)
+      const response = await fetch(
+        appUrl(`/api/search/?${params.toString()}`),
+      )
       if (response.status === 401) {
         handleUnauthorized()
         return
