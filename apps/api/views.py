@@ -146,28 +146,32 @@ def classify_variants(request):
                 status=400,
             )
 
-        parsed_dbsnps = [
-            parse_excel_dbsnp(str(x).strip())
-            for x in df[dbsnp_col].drop_nulls().unique().to_list()
-        ]
+        unique_dbsnps = []
 
-        unique_dbsnps = [
-            db
-            for db in parsed_dbsnps
-            if db and db.strip() not in ["", "-", "—", "none", "nan"]
-        ]
+        if dbsnp_col:
+            parsed_dbsnps = [
+                parse_excel_dbsnp(str(x).strip())
+                for x in df[dbsnp_col].drop_nulls().unique().to_list()
+            ]
 
-        raw_variants = [
-            str(x).strip()
-            for x in df[hgsv_c_col].drop_nulls().unique().to_list()
-            if str(x).strip()
-        ]
+            unique_dbsnps = [
+                db
+                for db in parsed_dbsnps
+                if db and db.strip() not in ["", "-", "—", "none", "nan"]
+            ]
 
-        unique_variants = []
-        for v in raw_variants:
-            _, _, hgvs = parse_excel_hgvs(v)
-            if hgvs:
-                unique_variants.append(hgvs)
+        if hgsv_c_col:
+            raw_variants = [
+                str(x).strip()
+                for x in df[hgsv_c_col].drop_nulls().unique().to_list()
+                if str(x).strip()
+            ]
+
+            unique_variants = []
+            for v in raw_variants:
+                _, _, hgvs = parse_excel_hgvs(v)
+                if hgvs:
+                    unique_variants.append(hgvs)
 
         dbsnp_map, hgvs_map = get_variant_hashes_from_db(unique_dbsnps, unique_variants)
 

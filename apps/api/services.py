@@ -307,6 +307,7 @@ def get_variant_hashes_from_db(
     return dbsnp_map, hgvs_map
 
 
+#TODO: Choose correct sheet for annotation, currently it takes the active
 def annotate_excel_workbook(
     file_bytes: bytes, dbsnp_map: dict, hgvs_map: dict
 ) -> io.BytesIO:

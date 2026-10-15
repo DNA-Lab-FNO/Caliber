@@ -20,14 +20,25 @@ from apps.core.models import (
 
 logger = logging.getLogger(__name__)
 
-# Dedicated in-memory caches to prevent redundant DB lookups inside the loop
-patient_cache = {}
-gene_cache = {}
-variant_cache = {}
-annotation_cache = {}
-variant_gene_m2m_cache = (
-    set()
-)  # Tracks (variant_id, gene_id) to avoid repetitive .add() queries
+class ImportCaches:
+    """
+    In-memory caches scoped to an import run to prevent redundant DB lookups
+    while avoiding unbounded memory leaks or transaction-rollback contamination.
+    """
+
+    def __init__(self):
+        self.patient_cache: dict[str, Patient] = {}
+        self.gene_cache: dict[str, Gene] = {}
+        self.variant_cache: dict[tuple, GeneVariant] = {}
+        self.annotation_cache: dict[tuple, TranscriptAnnotation] = {}
+        self.variant_gene_m2m_cache: set[tuple[int, int]] = set()
+
+    def clear(self) -> None:
+        self.patient_cache.clear()
+        self.gene_cache.clear()
+        self.variant_cache.clear()
+        self.annotation_cache.clear()
+        self.variant_gene_m2m_cache.clear()
 
 
 def sheet_exists(path: str, sheet: str) -> bool:
@@ -158,12 +169,20 @@ def parse_row(row) -> dict:
     return cleaned_data
 
 
-def persist_row(data: dict, file_name: str, user: User | None = None) -> None:
-    if data["patient_id"] not in patient_cache:
+def persist_row(
+    data: dict,
+    file_name: str,
+    user: User | None = None,
+    caches: ImportCaches | None = None,
+) -> None:
+    if caches is None:
+        caches = ImportCaches()
+
+    if data["patient_id"] not in caches.patient_cache:
         patient, _ = Patient.objects.get_or_create(name=data["patient_id"])
-        patient_cache[data["patient_id"]] = patient
+        caches.patient_cache[data["patient_id"]] = patient
     else:
-        patient = patient_cache[data["patient_id"]]
+        patient = caches.patient_cache[data["patient_id"]]
 
     # 2. GeneVariant Lookup (Using the updated genomic coordinates unique constraint)
     variant_key = (
@@ -174,7 +193,7 @@ def persist_row(data: dict, file_name: str, user: User | None = None) -> None:
         data["alt_allele"],
     )
 
-    if variant_key not in variant_cache:
+    if variant_key not in caches.variant_cache:
         gene_variant, _ = GeneVariant.objects.get_or_create(
             chromosome=data["chromosome"],
             position=data["position"],
@@ -194,29 +213,29 @@ def persist_row(data: dict, file_name: str, user: User | None = None) -> None:
             gene_variant.dbsnp = data["dbSNP"]
             gene_variant.save(update_fields=["dbsnp"])
 
-        variant_cache[variant_key] = gene_variant
+        caches.variant_cache[variant_key] = gene_variant
     else:
-        gene_variant = variant_cache[variant_key]
+        gene_variant = caches.variant_cache[variant_key]
 
     # 3. Handle ManyToMany Relationship for Genes
     # Splitting by common delimiters (like commas or slashes) in case an excel row lists overlapping genes
 
     for symbol in data["gene_symbols"]:
-        if symbol not in gene_cache:
+        if symbol not in caches.gene_cache:
             gene, _ = Gene.objects.get_or_create(symbol=symbol)
-            gene_cache[symbol] = gene
+            caches.gene_cache[symbol] = gene
         else:
-            gene = gene_cache[symbol]
+            gene = caches.gene_cache[symbol]
 
         # Utilize the m2m cache to prevent executing repetitive SQL intermediate inserts
         m2m_key = (gene_variant.id, gene.id)
-        if m2m_key not in variant_gene_m2m_cache:
+        if m2m_key not in caches.variant_gene_m2m_cache:
             gene_variant.genes.add(gene)
-            variant_gene_m2m_cache.add(m2m_key)
+            caches.variant_gene_m2m_cache.add(m2m_key)
 
     # 4. TranscriptAnnotation Lookup (Moved to a dedicated annotation cache dictionary)
     annotation_key = (data["hgvs_c"], gene_variant.id)
-    if annotation_key not in annotation_cache:
+    if annotation_key not in caches.annotation_cache:
         annotation, _ = TranscriptAnnotation.objects.get_or_create(
             variant=gene_variant,
             hgvs_c=data["hgvs_c"],
@@ -227,7 +246,7 @@ def persist_row(data: dict, file_name: str, user: User | None = None) -> None:
                 "exon": data["exon"],
             },
         )
-        annotation_cache[annotation_key] = annotation
+        caches.annotation_cache[annotation_key] = annotation
 
     # 5. Report & Patient Linkage
     report, _ = GeneticReport.objects.get_or_create(
@@ -244,10 +263,24 @@ def persist_row(data: dict, file_name: str, user: User | None = None) -> None:
     )
 
 
-def parse_df(df: pl.DataFrame, file_name: str, user: User | None = None):
-    for row in df.iter_rows(named=True):
-        cleaned_data = parse_row(row)
-        persist_row(cleaned_data, file_name, user=user)
+def parse_df(
+    df: pl.DataFrame,
+    file_name: str,
+    user: User | None = None,
+    caches: ImportCaches | None = None,
+) -> None:
+    owns_cache = caches is None
+    if owns_cache:
+        caches = ImportCaches()
+
+    try:
+        for row in df.iter_rows(named=True):
+            cleaned_data = parse_row(row)
+            persist_row(cleaned_data, file_name, user=user, caches=caches)
+    finally:
+        if owns_cache:
+            caches.clear()
+
 
 
 class Command(BaseCommand):
