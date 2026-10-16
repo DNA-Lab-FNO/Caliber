@@ -22,9 +22,8 @@ SECRET_KEY = env("SECRET_KEY")
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = env("DEBUG")
 
-ALLOWED_HOSTS = env.list("ALLOWED_HOSTS")
 ALLOWED_HOSTS = env.list("ALLOWED_HOSTS", default=["localhost", "127.0.0.1"])
-for internal_host in ["127.0.0.1", "localhost"]:
+for internal_host in ["127.0.0.1", "localhost", "testserver"]:
     if internal_host not in ALLOWED_HOSTS:
         ALLOWED_HOSTS.append(internal_host)
 
@@ -37,8 +36,7 @@ AUTH_USER_MODEL = "core.User"
 # Reverse proxy / SSL configuration
 if env.bool("USE_X_FORWARDED_PROTO", default=False):
     SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
-CSRF_COOKIE_NAME = "csrftoken"
-CSRF_COOKIE_HTTPONLY = False
+
 
 # Application definition
 
@@ -127,10 +125,19 @@ USE_TZ = True
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/6.0/howto/static-files/
 
-STATIC_URL = "/static/"
-STATIC_ROOT = BASE_DIR / "staticfiles"
+FORCE_SCRIPT_NAME = env("FORCE_SCRIPT_NAME", default=None) or None
+_raw_static_url = env("STATIC_URL", default=None)
+if _raw_static_url:
+    STATIC_URL = _raw_static_url if _raw_static_url.endswith("/") else f"{_raw_static_url}/"
+elif FORCE_SCRIPT_NAME:
+    STATIC_URL = f"{FORCE_SCRIPT_NAME.rstrip('/')}/static/"
+else:
+    STATIC_URL = "/static/"
 
-# File upload limits (default in Django is only 2.5MB, insufficient for large genomic sheets)
+STATIC_ROOT = BASE_DIR / "staticfiles"
+WHITENOISE_STATIC_PREFIX = "/static/"
+
+# File upload limits (default 100MB for large genomic spreadsheets)
 DATA_UPLOAD_MAX_MEMORY_SIZE = env.int("DATA_UPLOAD_MAX_MEMORY_SIZE", default=100 * 1024 * 1024)  # 100 MB
 FILE_UPLOAD_MAX_MEMORY_SIZE = env.int("FILE_UPLOAD_MAX_MEMORY_SIZE", default=100 * 1024 * 1024)  # 100 MB
 
@@ -148,7 +155,14 @@ STORAGES = {
     },
 }
 
-MEDIA_URL = "media/"
+_raw_media_url = env("MEDIA_URL", default=None)
+if _raw_media_url:
+    MEDIA_URL = _raw_media_url if _raw_media_url.endswith("/") else f"{_raw_media_url}/"
+elif FORCE_SCRIPT_NAME:
+    MEDIA_URL = f"{FORCE_SCRIPT_NAME.rstrip('/')}/media/"
+else:
+    MEDIA_URL = "/media/"
+
 MEDIA_ROOT = BASE_DIR / "media"
 
 LOG_LEVEL = env("LOG_LEVEL", default="INFO").upper()

@@ -41,9 +41,14 @@ services:
       USE_X_FORWARDED_PROTO: ${USE_X_FORWARDED_PROTO:-True}
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
       CONN_MAX_AGE: ${CONN_MAX_AGE:-60}
+      DATA_UPLOAD_MAX_MEMORY_SIZE: ${DATA_UPLOAD_MAX_MEMORY_SIZE:-104857600}
+      FILE_UPLOAD_MAX_MEMORY_SIZE: ${FILE_UPLOAD_MAX_MEMORY_SIZE:-104857600}
+      STATIC_URL: ${STATIC_URL:-/static/}
+      FORCE_SCRIPT_NAME: ${FORCE_SCRIPT_NAME:-} # Optional: Set to a subpath (e.g., /caliber) if the app is served behind a reverse proxy at a subpath
+    command: ["gunicorn", "caliber.wsgi:application", "--bind", "0.0.0.0:8000", "--workers", "3", "--timeout", "300"]
     ports:
       # Expose port 8000 directly (accessible directly or via an external reverse proxy)
-      - "8000:8000"
+      - "127.0.0.1:8000:8000"
     volumes:
       # Persistent storage for uploaded media and reference dataset imports
       - caliber_data:/app/data
@@ -57,25 +62,25 @@ services:
   # or Cloudflare Tunnel) on the server, you can safely remove or comment out
   # this entire caddy block and point your reverse proxy to localhost:8000.
   # ============================================================================
-  caddy:
-    image: caddy:2-alpine
-    container_name: caliber_caddy
-    restart: unless-stopped
-    ports:
-      - "80:80"
-      - "443:443"
-      - "443:443/udp" # HTTP/3 support
-    environment:
-      SERVER_NAME: ${SERVER_NAME:-:80}
-      ACME_EMAIL: ${ACME_EMAIL:-}
-    volumes:
-      - ./Caddyfile:/etc/caddy/Caddyfile:ro
-      - caddy_data:/data
-      - caddy_config:/config
-    depends_on:
-      - web
-    networks:
-      - caliber_network
+  # caddy:
+  #   image: caddy:2-alpine
+  #   container_name: caliber_caddy
+  #   restart: unless-stopped
+  #   ports:
+  #     - "80:80"
+  #     - "443:443"
+  #     - "443:443/udp" # HTTP/3 support
+  #   environment:
+  #     SERVER_NAME: ${SERVER_NAME:-:80}
+  #     ACME_EMAIL: ${ACME_EMAIL:-}
+  #   volumes:
+  #     - ./Caddyfile:/etc/caddy/Caddyfile:ro
+  #     - caddy_data:/data
+  #     - caddy_config:/config
+  #   depends_on:
+  #     - web
+  #   networks:
+  #     - caliber_network
 
 networks:
   caliber_network:
@@ -88,8 +93,8 @@ volumes:
     name: caliber_data
   caliber_media:
     name: caliber_media
-  caddy_data:
-    name: caliber_caddy_data
-  caddy_config:
-    name: caliber_caddy_config
+  # caddy_data:
+  #   name: caliber_caddy_data
+  # caddy_config:
+  #   name: caliber_caddy_config
 

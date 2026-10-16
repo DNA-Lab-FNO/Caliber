@@ -1,5 +1,5 @@
 <script lang="ts">
-    import { getCookie } from "../lib/api";
+    import { apiUrl, getCookie } from "../lib/api";
 
   interface Props {
     onunauthorized?: () => void
@@ -70,7 +70,7 @@
     try {
       const csrfToken = getCookie('csrftoken');
       
-      const response = await fetch('/api/classify/', {
+      const response = await fetch(apiUrl('/api/classify/'), {
         method: 'POST',
         body: formData,
         headers: {

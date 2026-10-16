@@ -1,5 +1,5 @@
 <script lang="ts">
-    import { getCookie, parseResponse } from "../lib/api";
+    import { apiUrl, getCookie, parseResponse } from "../lib/api";
 
   interface Props {
     onunauthorized?: () => void
@@ -32,7 +32,7 @@
 
     isUploading = true
     try {
-      const response = await fetch('/api/upload/', {
+      const response = await fetch(apiUrl('/api/upload/'), {
         method: 'POST',
         headers: {
           'X-CSRFToken': getCookie('csrftoken'),

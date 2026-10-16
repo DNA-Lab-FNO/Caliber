@@ -10,6 +10,26 @@ export class ApiError extends Error {
   }
 }
 
+export function getBasePath(): string {
+  if (typeof window !== 'undefined') {
+    const injected = (window as any).__CALIBER_BASE_PATH__;
+    if (typeof injected === 'string' && injected.length > 0) {
+      return injected.replace(/\/+$/, '');
+    }
+    // Fallback detection: if current location starts with /caliber
+    if (window.location.pathname.startsWith('/caliber')) {
+      return '/caliber';
+    }
+  }
+  return '';
+}
+
+export function apiUrl(path: string): string {
+  const base = getBasePath();
+  const cleanPath = path.startsWith('/') ? path : `/${path}`;
+  return `${base}${cleanPath}`;
+}
+
 export function getCookie(name: string): string {
   const escapedName = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   const match = document.cookie.match(new RegExp(`(?:^|;\\s*)${escapedName}=([^;]*)`));

@@ -9,11 +9,35 @@ from .auth import parse_request_data, serialize_user
 from .models import User
 
 
+from django.templatetags.static import static
+
+
 def index(request):
     get_token(request)
+    base_path = (
+        request.META.get("HTTP_X_FORWARDED_PREFIX")
+        or getattr(settings, "FORCE_SCRIPT_NAME", "")
+        or ""
+    ).rstrip("/")
+
+    css_url = static("svelte/main.css")
+    js_url = static("svelte/main.js")
+    if base_path and not css_url.startswith(base_path):
+        css_url = f"{base_path}{css_url}"
+    if base_path and not js_url.startswith(base_path):
+        js_url = f"{base_path}{js_url}"
+
     return render(
-        request, "core/index.html", {"debug": settings.DEBUG}
-    )  # Pass debug flag to template for conditional frontend behavior
+        request,
+        "core/index.html",
+        {
+            "debug": settings.DEBUG,
+            "base_path": base_path,
+            "css_url": css_url,
+            "js_url": js_url,
+        },
+    )
+
 
 
 @require_GET
