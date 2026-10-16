@@ -5,10 +5,13 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Caliber</title>
+    <script>
+        window.__CALIBER_BASE_PATH__ = "{{ base_path|default:'' }}";
+    </script>
     {% if debug %}
         <link rel="stylesheet" href="http://localhost:5173/src/app.css">
     {% else %}
-        <link rel="stylesheet" href="{% static 'svelte/main.css' %}">
+        <link rel="stylesheet" href="{{ css_url }}">
     {% endif %}
 </head>
 <body>
@@ -16,7 +19,7 @@
     {% if debug %}
         <script type="module" src="http://localhost:5173/src/main.ts"></script>
     {% else %}
-        <script src="{% static 'svelte/main.js' %}" defer></script>
+        <script src="{{ js_url }}" defer></script>
     {% endif %}
 </body>
 </html>

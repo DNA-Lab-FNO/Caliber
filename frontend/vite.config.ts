@@ -8,7 +8,7 @@ export default defineConfig(({ mode }) => {
 
   return {
     plugins: [svelte({ emitCss: true })],
-    base: production ? '/static/svelte/' : '/',
+    base: production ? '' : '/',
     server: {
       port: 5173,
       strictPort: true,
