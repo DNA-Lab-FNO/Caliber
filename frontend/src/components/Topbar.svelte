@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { apiUrl } from '../lib/api';
+
   interface Props {
     currentView: 'registry' | 'batch' | 'dashboard';
     onviewchange: (view: 'registry' | 'batch' | 'dashboard') => void;
@@ -66,7 +68,7 @@
     <div class="spacer"></div>
     <div class="topbar-actions">
       {#if isStaff}
-        <a href="/admin/" class="ghost nav-btn admin-topbar-link" target="_blank" rel="noreferrer">
+        <a href={apiUrl('/admin/')} class="ghost nav-btn admin-topbar-link" target="_blank" rel="noreferrer">
           Administrace ↗
         </a>
       {/if}
