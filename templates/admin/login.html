@@ -67,7 +67,8 @@
             />
           </label>
 
-          <input type="hidden" name="next" value="{{ next|default:'/admin/' }}" />
+          {% url 'admin:index' as default_next %}
+          <input type="hidden" name="next" value="{{ next|default:default_next }}" />
 
           <button type="submit" class="ghost auth-submit">Přihlásit se do administrace</button>
         </form>
